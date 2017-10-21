@@ -11,7 +11,8 @@
 #include <sstream>
 #include <cmath>
 #include <vector>
-//#include "ttauristar.hpp"
+#include <stdio.h>
+#include "ttauristar.hpp"
 
 using namespace std;
 /**
@@ -44,7 +45,7 @@ vector<vector<double>> readcmk(string fname)
     const double SOLARRADIUS = 7e10; // Solar radius in cm
     const double SOLARLUMINOSITY = 3.86e33;  // Solar luminosity in ergs per second
     // Solar tempertaure in Kelvins
-    const double SOLARTEMPERATURE = SOLARLUMINOSITY/pow(4*PI*pow(SOLARRADIUS,2)*SIGMAB,0.25);
+    const double SOLARTEMPERATURE = pow(SOLARLUMINOSITY/(4*PI*pow(SOLARRADIUS,2)*SIGMAB),0.25);
 
 
     double mass;
@@ -81,18 +82,44 @@ vector<vector<double>> readcmk(string fname)
     return cmktable;
 }
 
-
 int main()
-{
+{  
     vector<vector<double>> cmktable = readcmk("cmkdata.txt");
-    for (vector<double> vec : cmktable) {
+    //double radius = calculateradius(cmktable,0.250000,0.104424);
+    /*
+    FILE * cmk = fopen("cmk.temp", "w");
+    for(size_t k=0;k<cmktable[0].size();k++) {
+        fprintf(cmk,"%f %f %f \n",cmktable[0][k],cmktable[1][k],cmktable[2][k]);
+    }
+    */
+    TTauriStar star = TTauriStar(cmktable, 0.68, 1, 1);
+    star.updatentimes(1);
+    string vectorname1 = "Age";
+    string vectorname2 = "Period";
+    vector<vector<double>> table = star.getvectors(vectorname1,vectorname2);
+    
+    /*
+    for (vector<double> vec : table) {
         for (double value : vec) {
             cout << value << endl;
         }
     }
-    for (vector<double> vec : cmktable) {
+    for (vector<double> vec : table) {
         cout << vec.size() << endl;
     }
-	// simulateOneStar();
+    */
+
+    //cout << radius << endl;
+
+    FILE * temp = fopen("data.temp", "w");
+    FILE* gp=popen("gnuplot -persistent","w");
+    for(size_t k=0;k<table[0].size();k++) {
+        fprintf(temp,"%f %f \n",table[0][k],table[1][k]);
+    }
+    fprintf(gp, "%s%s %s %s%s\n", "set title \"",vectorname2.data(),"vs",vectorname1.data(),"\"");    
+    fprintf(gp, "%s \n", "set xlabel \"Age (Myr)\"");
+    fprintf(gp, "%s \n", "set ylabel \"Period (days)\"");
+    fprintf(gp, "%s \n", "plot 'data.temp'");
+    
 	return 0;
 }
