@@ -16,11 +16,12 @@ double const BETA = 1.35;            /// R_M/R_A
 double const GAMMA = 1.0;            /// R_C/R_M
 //double const SHAPEFACTOR = 0.17;     /// f in the rotational inertia I=fMR^2
 double const PROPEFF = 0.3;          /// propeller coefficient
-double const CRITICALDENSITY = 6e-4; /// accretion disk density cutoff
+double const CRITICALDENSITY = 6e-4; /// accretion disk density cutoff 6e-4
 double const PROPSTARTTIME = 0.05;   /// simulation starts at this time
 double const TURNONTIME = 0.05;
 // double const PROPTIMESPREAD = 0.002; /// introduce randomness for PROPSTARTTIME
 double const BFIELD = 1.67;           /// fieldstrength is set to be a constant
+double const DELTAM = 0.01;            /// deltam to determine when to stop
 
 TTauriStar::TTauriStar(vector<vector<double>> cmktable, 
 	double mass, double age, double massdotfactor)
@@ -29,6 +30,7 @@ TTauriStar::TTauriStar(vector<vector<double>> cmktable,
 	// set propeller endtime to be the same as starttime
 	propendtime_ = PROPSTARTTIME;
 	acceff_ = 1;
+	massi_ = 0;
 }
 
 double TTauriStar::calculatemassdot()
@@ -154,6 +156,8 @@ void TTauriStar::calculateperiods()
 {
 	// clear vectors involved
 	periods_.clear();
+	// initialze massi_
+	massi_ = masses_[0];
 	// go forward in time
 	for (size_t i = 0; i < ages_.size(); ++i) {
 		// retrieve mass and age stored in vectors
@@ -189,17 +193,24 @@ void TTauriStar::calculateperiods()
 		}
 		// store the period
 		periods_.push_back(period_);
-		radii_.push_back(radius_);
-		rms_.push_back(rm_);
+		//radii_.push_back(radius_);
+		//rms_.push_back(rm_);
 	}
+	cout << acceff_ << endl;
 }
 
-void TTauriStar::updatentimes(size_t n)
+void TTauriStar::update()
 {
-	for (size_t i = 0; i < n; ++i) {
-		calculatemasses();
+	// keep track of the number of iterations
+	int i = 1;
+	calculatemasses();
+	while (abs((masses_[0]-massi_)/masses_[0]) > DELTAM) {	
 	    calculateperiods();
-	}	
+	    calculatemasses();
+	    ++i;
+	}
+	calculateperiods();
+	cout << "iterate " << i << " times" << endl;	
 }
 
 vector<vector<double>> TTauriStar::getvectors(string vectorname1, string vectorname2)

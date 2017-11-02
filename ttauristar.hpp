@@ -23,7 +23,7 @@ class TTauriStar {
 public:
 	TTauriStar(vector<vector<double>> cmktable, double mass, double age, double massdotfactor);
 	
-	void updatentimes(size_t n);
+	void update();
 	vector<vector<double>> getvectors(string vectorname1, string vectorname2);
 private:
 	double calculatemassdot();
@@ -47,7 +47,8 @@ private:
 	double diskdensity_;
 	double propendtime_;
 	double acceff_;             /// fraction of deposition by accretion
-	
+	double massi_;              /// initil mass in previous iteration
+
 	vector<double> ages_;
 	vector<double> masses_;         /// mass of the protostar
 	vector<double> periods_;       /// period of the protostar
