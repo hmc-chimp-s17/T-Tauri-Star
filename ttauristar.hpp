@@ -23,8 +23,11 @@ class TTauriStar {
 public:
 	TTauriStar(vector<vector<double>> cmktable, double mass, double age, double massdotfactor);
 	
-	void update();
-	vector<vector<double>> getvectors(string vectorname1, string vectorname2);
+	double update();
+	vector<double> getvector(int n);
+	string getname(int n);
+	string getunit(int n);
+	void plot(int m, int n);
 private:
 	double calculatemassdot();
 	double calculateradius();
@@ -39,7 +42,7 @@ private:
 	double mass_;
 	double age_;
 	double massdotfactor_;
-	double massdot_;
+	double massdot_;            /// M_sun/yr
 	double period_;
 	double radius_;
 	double bfield_;
@@ -47,14 +50,18 @@ private:
 	double diskdensity_;
 	double propendtime_;
 	double acceff_;             /// fraction of deposition by accretion
-	double massi_;              /// initil mass in previous iteration
+	double mass2_;              /// mass calculated when going forward
 
+	bool valid_;
+	
 	vector<double> ages_;
 	vector<double> masses_;         /// mass of the protostar
+    vector<double> massdots_;         /// mass of the protostar
 	vector<double> periods_;       /// period of the protostar
 	vector<double> acceffs_;
 	vector<double> radii_;
 	vector<double> rms_;
+	vector<double> diskdensities_;
 };
 
 #endif

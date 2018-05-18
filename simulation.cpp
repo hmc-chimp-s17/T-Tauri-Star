@@ -1,5 +1,5 @@
 /**
- * \file onestar.cpp
+ * \file simulation.cpp
  *
  * \authors Cynthia Yan
  *
@@ -13,6 +13,7 @@
 #include <vector>
 #include <random>
 #include <stdio.h>
+#include <ctime>
 #include "ttauristar.hpp"
 
 using namespace std;
@@ -94,7 +95,7 @@ vector<vector<double>> readcluster(string fname)
     ifstream inputFile(fname);
 
     if (!inputFile.good()) {
-        throw invalid_argument( "Couldn't open cmk file for reading" );
+        throw invalid_argument( "Couldn't open cluster file for reading" );
     }
 
     // throw the first line
@@ -134,9 +135,10 @@ vector<vector<double>> readcluster(string fname)
  * \brief generate the distribution corresponding to a cluster
  * 
  * \param fname      vectors of logmasses and logages
+ * \param n          size of the simulated star table
  * \returns          a distribution     
  */
-vector<vector<double>> generatedistribution(vector<vector<double>> startable)
+vector<vector<double>> generatedistribution(vector<vector<double>> startable, double n)
 {
     // create mass bins
     vector<double> logmassbins{-1.5,-1.25,-1,-0.75,-0.5,-0.25,0,0.25,0.5,0.75,1};
@@ -159,7 +161,7 @@ vector<vector<double>> generatedistribution(vector<vector<double>> startable)
     vector<double> logages = startable[1];
     // the number of stars in the table
     size_t numstar = logmasses.size();
-    // iteratre over the stars in the cluster
+    // iterate over the stars in the cluster
     for (size_t i = 0; i < numstar; ++i) {
         // find the interval that the logmass belongs to
         for (size_t j = 0; j < nummassbin; ++j) {
@@ -185,11 +187,11 @@ vector<vector<double>> generatedistribution(vector<vector<double>> startable)
     }
     */
     // create distributions
-    piecewise_constant_distribution<> logmassdist(logmassbins.begin(),
+    piecewise_linear_distribution<> logmassdist(logmassbins.begin(),
         logmassbins.end(),logmassweights.begin());
-    vector<piecewise_constant_distribution<>> logagedists;
+    vector<piecewise_linear_distribution<>> logagedists;
     for (size_t i = 0; i < nummassbin; ++i) {
-        logagedists.push_back(piecewise_constant_distribution<>(logagebins.begin(),
+        logagedists.push_back(piecewise_linear_distribution<>(logagebins.begin(),
         logagebins.end(),logageweights[i].begin()));
     }
     // vectors to store simulated mass
@@ -198,7 +200,7 @@ vector<vector<double>> generatedistribution(vector<vector<double>> startable)
     // random number generator
     random_device rd;
     mt19937 gen(rd());
-    for (size_t i = 0; i < 1000; ++i){
+    for (size_t i = 0; i < n; ++i){
         double logmass = logmassdist(gen);
         double logage = 0.0;
         for (size_t i = 0; i < nummassbin; ++i) {
@@ -216,48 +218,96 @@ vector<vector<double>> generatedistribution(vector<vector<double>> startable)
     return simstartable;
 }
 
+/**
+ * \brief plot startable
+ * 
+ * \param startable  vector of <logmass,logage>
+ * \returns             
+ */
+void plotstartable(vector<vector<double>> startable)
+{ 
+    FILE * temp2 = fopen("star.temp", "w");
+    FILE* gp2=popen("gnuplot -persistent","w");
+    for(size_t k=0;k<startable[0].size();k++) {
+        fprintf(temp2,"%f %f \n",startable[0][k],startable[1][k]);
+    }
+    fprintf(gp2, "%s%s %s \n", "set title \"","NGC2264","\""); 
+
+    fprintf(gp2, "%s \n", "set xlabel \"LogMass\"");
+    fprintf(gp2, "%s \n", "set ylabel \"LogAge\"");
+    fprintf(gp2, "%s \n", "plot 'star.temp'");
+    
+}
+
+/**
+ * \brief plot histogram
+ * 
+ * \returns             
+ */
+void plothistogram(vector<double> periods1, vector<double> periods2)
+{ 
+    FILE * temp1 = fopen("periods1.temp", "w");
+    FILE * temp2 = fopen("periods2.temp", "w");
+    FILE* gp3=popen("gnuplot -persistent","w");
+    for(size_t k=0;k<periods1.size();k++) {
+        fprintf(temp1,"%f \n",periods1[k]);
+    }
+    for(size_t k=0;k<periods2.size();k++) {
+        fprintf(temp2,"%f \n",periods2[k]);
+    }
+
+    fprintf(gp3, "%s\n", "binwidth=1");
+    fprintf(gp3, "%s\n", "set boxwidth binwidth");
+    fprintf(gp3, "%s\n", "bin(x,width)=width*floor(x/width) + binwidth/2.0");
+    fprintf(gp3, "%s%s %s \n", "set multiplot layout 2,1 title \"","Period Distribution","\"");
+    fprintf(gp3, "%s \n", "set ylabel \"Number of stars\""); 
+    fprintf(gp3, "%s \n", "unset xlabel");
+    fprintf(gp3, "%s \n", "set xrange [0:14]");
+    fprintf(gp3, "%s%s %s \n", "set label 1\"","m < 0.25 solar mass","\" at graph 0.8,0.9"); 
+    fprintf(gp3, "%s \n", "plot 'periods1.temp' using (bin($1,binwidth)):(1.0) smooth freq with boxes notitle");
+    fprintf(gp3, "%s \n", "set xlabel");
+    fprintf(gp3, "%s \n", "set xlabel \"Period (days)\"");
+    fprintf(gp3, "%s%s %s \n", "set label 1\"","m > 0.25 solar mass","\" at graph 0.8,0.9");
+    fprintf(gp3, "%s \n", "plot 'periods2.temp' using (bin($1,binwidth)):(1.0) smooth freq with boxes notitle");
+    fprintf(gp3, "%s \n", "unset multiplot");
+}
+
 int main()
 {     
-    /*
-    vector<vector<double>> cmktable = readcmk("cmkdata.txt");
-    TTauriStar star = TTauriStar(cmktable, 0.68, 1, 1);
-    star.update();
-    string vectorname1 = "Age";
-    string vectorname2 = "Period";
-    vector<vector<double>> table = star.getvectors(vectorname1,vectorname2);
-    
-    FILE * temp = fopen("data.temp", "w");
-    FILE* gp=popen("gnuplot -persistent","w");
-    for(size_t k=0;k<table[0].size();k++) {
-        fprintf(temp,"%f %f \n",table[0][k],table[1][k]);
-    }
-    fprintf(gp, "%s%s %s %s%s\n", "set title \"",vectorname2.data(),"vs",vectorname1.data(),"\"");    
-    fprintf(gp, "%s \n", "set xlabel \"Age (Myr)\"");
-    fprintf(gp, "%s \n", "set ylabel \"Period (days)\"");
-    fprintf(gp, "%s \n", "plot 'data.temp'");
-    */
-    
+    // number of stars
+    size_t n = 200;
+    // sample from a given cluster
     vector<vector<double>> startable = readcluster("dahm.txt");
-    /*
-    FILE * temp = fopen("data.temp", "w");
-    FILE* gp=popen("gnuplot -persistent","w");
-    for(size_t k=0;k<startable[0].size();k++) {
-        fprintf(temp,"%f %f \n",startable[0][k],startable[1][k]);
-    }
-    fprintf(gp, "%s%s %s \n", "set title \"","ONC","\"");    
-    fprintf(gp, "%s \n", "set xlabel \"LogMass\"");
-    fprintf(gp, "%s \n", "set ylabel \"LogAge\"");
-    fprintf(gp, "%s \n", "plot 'data.temp'");
-    */
-    vector<vector<double>> simstartable = generatedistribution(startable);
-    FILE * temp = fopen("data.temp", "w");
-    FILE* gp=popen("gnuplot -persistent","w");
-    for(size_t k=0;k<simstartable[0].size();k++) {
-        fprintf(temp,"%f %f \n",simstartable[0][k],simstartable[1][k]);
-    }
-    fprintf(gp, "%s%s %s \n", "set title \"","ONC","\"");    
-    fprintf(gp, "%s \n", "set xlabel \"LogMass\"");
-    fprintf(gp, "%s \n", "set ylabel \"LogAge\"");
-    fprintf(gp, "%s \n", "plot 'data.temp'");
-	return 0;
+    vector<vector<double>> simstartable = generatedistribution(startable,n);
+    // plotstartable(startable);
+    // compute cmk table
+    vector<vector<double>> cmktable = readcmk("cmkdata.txt");
+    // loop throough the stars
+    
+    std::clock_t start;
+    double duration;
+    start = std::clock();
+    vector<double> periods1, periods2;
+    for (size_t i = 0; i < n; ++i) {
+        double mass = pow(10,simstartable[0][i]);
+        double age = pow(10,simstartable[1][i]);
+        cout << "mass: " << mass << "solar mass; Age: " << age << endl; 
+        TTauriStar star = TTauriStar(cmktable, mass, age, 1);
+        double period = star.update();
+        if (period > 0.001) {
+            if (mass < 0.25) {
+                periods1.push_back(period);
+            } else {
+                periods2.push_back(period);
+            }
+            //star.plot(1,3);
+        }     
+    }   
+    duration = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
+    std::cout<<"printf: "<< duration <<'\n';
+
+    // plot
+    plothistogram(periods1, periods2);
+    return 0;
 }
+

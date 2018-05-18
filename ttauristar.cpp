@@ -16,21 +16,43 @@ double const BETA = 1.35;            /// R_M/R_A
 double const GAMMA = 1.0;            /// R_C/R_M
 //double const SHAPEFACTOR = 0.17;     /// f in the rotational inertia I=fMR^2
 double const PROPEFF = 0.3;          /// propeller coefficient
-double const CRITICALDENSITY = 6e-4; /// accretion disk density cutoff 6e-4
+double const CRITICALDENSITY = 250; /// accretion disk density cutoff 6e-4
 double const PROPSTARTTIME = 0.05;   /// simulation starts at this time
 double const TURNONTIME = 0.05;
 // double const PROPTIMESPREAD = 0.002; /// introduce randomness for PROPSTARTTIME
 double const BFIELD = 1.67;           /// fieldstrength is set to be a constant
-double const DELTAM = 0.01;            /// deltam to determine when to stop
+double const DELTAM = 0.0002;            /// deltam to determine when to stop
 
 TTauriStar::TTauriStar(vector<vector<double>> cmktable, 
 	double mass, double age, double massdotfactor)
     :cmktable_(cmktable), mass_(mass), age_(age), massdotfactor_(massdotfactor)
 {
+	// iniliatize validity
+	if (mass > 3) {
+		valid_ = false;
+	} else {
+		valid_ = true;
+	}
+	// initialize mass2_
+	mass2_ = 0;
 	// set propeller endtime to be the same as starttime
 	propendtime_ = PROPSTARTTIME;
-	acceff_ = 1;
-	massi_ = 0;
+	acceff_ = 1.0;
+	// starting values of age and acceff
+	ages_.push_back(age_);
+	acceffs_.push_back(acceff_);
+	// go backwards in time
+	while (age_ > PROPSTARTTIME) {
+		// calculate new age
+		age_ -= TIMESTEP;
+		// push_back the age into the ages vector
+		// will also be reversed later
+		ages_.push_back(age_);
+		acceffs_.push_back(1.0);
+	}
+	// reverse the two vectors to be in forward time order
+	reverse(ages_.begin(),ages_.end());
+	reverse(acceffs_.begin(),acceffs_.end());
 }
 
 double TTauriStar::calculatemassdot()
@@ -110,62 +132,59 @@ double TTauriStar::calculatediskdensity()
 	// ratio of moment of inertia and mass*radius^2
 	double f = pow(1.0-pow(radius_/rm_,0.5),1.0/4.0);
 	// density of accretion disk at rm
-	return 5.2*pow(ALPHA,-4.0/5.0)*pow(massdot_*6.307e9,0.7)*pow(mass_,0.25)*pow(rm_*6.996,-0.75)*pow(f,14.0/5.0);
+	return 8.79e6*pow(ALPHA,-4.0/5.0)*pow(massdot_,0.7)*pow(mass_,0.25)*pow(rm_,-0.75)*pow(f,14.0/5.0);
 }
 
 void TTauriStar::calculatemasses()
 {
 	// clear vectors involved
 	masses_.clear();
-	ages_.clear();
-	acceffs_.clear();
 	// initial values
 	masses_.push_back(mass_);
-	ages_.push_back(age_);
-	acceffs_.push_back(acceff_);
 	// go backwards in time
-	while (age_ > PROPSTARTTIME) {
+	for (size_t i = ages_.size() - 1; i >= 1; --i) {
+		// retrieve age and acceff
+		age_ = ages_[i];
+		acceff_ = acceffs_[i];
 		// calculate mass accretion rate
 		massdot_ = calculatemassdot();
-		// determine the acceff
-		if (age_ > propendtime_) {
-			// no accretion happens at propeller phase
-			acceff_ = 1;
-		} else {
-			acceff_ = 0;
-		}
 		// calculate new mass
 		mass_ -= 1.0e6*massdot_*acceff_*TIMESTEP;	
 		// push_back the mass into the masses vector
 		// will reversed after all the push_backs are done for efficiency
 		masses_.push_back(mass_);
-		// calculate new age
-		age_ -= TIMESTEP;
-		// push_back the age into the ages vector
-		// will also be reversed later
-		ages_.push_back(age_);
-		acceffs_.push_back(acceff_);
 	}
 	// reverse the two vectors to be in forward time order
 	reverse(masses_.begin(),masses_.end());
-	reverse(ages_.begin(),ages_.end());
-	reverse(acceffs_.begin(),acceffs_.end());
 }
 
 void TTauriStar::calculateperiods()
 {
 	// clear vectors involved
 	periods_.clear();
-	// initialze massi_
-	massi_ = masses_[0];
+	massdots_.clear();
+	radii_.clear();
+	rms_.clear();
+	diskdensities_.clear();
+	acceffs_.clear();
+	// initialze mass2_
+	mass2_ = masses_[0];
+	// initial phase
+	size_t phase = 1;
 	// go forward in time
 	for (size_t i = 0; i < ages_.size(); ++i) {
 		// retrieve mass and age stored in vectors
 		mass_ = masses_[i];
+		// cannot handle mass > 3 solar mass
+		if (mass_ > 3) {
+			valid_ = false;
+			break;
+		}
 		age_ = ages_[i];
-		acceff_ = acceffs_[i];
+		acceff_ = 1;
 		// update data members
 		massdot_ = calculatemassdot();
+		double radius = radius_;
 		radius_ = calculateradius();
 		bfield_ = calculatebfield();
 		rm_ = calculaterm();
@@ -173,88 +192,169 @@ void TTauriStar::calculateperiods()
 		// calculate the period at rm
 	    double periodrm = 0.1159*pow(rm_,3./2.)*pow(mass_,-1./2.);
 	    // 1. spin at break-up period
-	    if (i == 0) {
+	    if (i == 0 && phase <= 1) {
 	    	period_ = 0.1159*pow(radius_,3./2.)*pow(mass_,-1./2.);	
-	    	cout << 1 << endl;
+	    	// doesn't accrete
+	    	acceff_ = 0;
 		// 2. spin down due to propeller effect		
-		} else if (period_ < periodrm) {
+		} else if (period_ < periodrm && phase <= 2) {
 			period_ += TIMESTEP*PROPEFF*0.972*pow(BETA,-3.)*pow(period_,2.)*pow(mass_,-4./7.)*pow(bfield_,2./7.)*pow(radius_,-8./7.)*pow(massdot_/1.e-8,6./7.);
 			// keep track of the propeller endtime
 			propendtime_ = age_;
-			cout << 2 << endl;
+			// doesn't accrete
+			acceff_ = 0;
+			phase = 2;
 		// 3. disk-locked
-		} else if (diskdensity_ > CRITICALDENSITY) {
+		} else if (diskdensity_ > CRITICALDENSITY && phase <= 3) {
 			period_ = 8.*pow(GAMMA*BETA/0.9288,3./2.)*pow(massdot_/1.0e-8,-3./7.)*pow(mass_/0.5,-5./7.)*pow(radius_/2.,18./7.)*pow(bfield_,6./7.);
-		    cout << 3 << endl;
+		    phase = 3;
 		// 4. unlocked
 		} else {
-			period_ += TIMESTEP*acceff_*period_*massdot_/mass_*(1-pow(rm_,0.5)*pow(radius_,-2.)*period_*8.08e6);
-		    cout << 4 << endl;
+			// G in units of (solar radius^3)/(day^2 solarmass) G = 2937.5
+			period_ += period_*2*(radius_-radius)/radius_
+			    +TIMESTEP*acceff_*period_*massdot_/mass_
+				-50.74*TIMESTEP*acceff_*pow(period_,2)*massdot_/pow(mass_,0.5)*pow(rm_,0.5)*pow(radius_,-2.);
+		    phase = 4;
 		}
+		// calculate mass moving forward
+		if (i < ages_.size() - 1) {
+			mass2_ += 1.0e6*massdot_*acceff_*TIMESTEP;
+		}	
 		// store the period
 		periods_.push_back(period_);
-		//radii_.push_back(radius_);
-		//rms_.push_back(rm_);
+		massdots_.push_back(massdot_);
+		radii_.push_back(radius_);
+		rms_.push_back(rm_);
+		diskdensities_.push_back(diskdensity_);
+		acceffs_.push_back(acceff_);
 	}
-	cout << acceff_ << endl;
 }
 
-void TTauriStar::update()
+double TTauriStar::update()
 {
-	// keep track of the number of iterations
-	int i = 1;
-	calculatemasses();
-	while (abs((masses_[0]-massi_)/masses_[0]) > DELTAM) {	
-	    calculateperiods();
-	    calculatemasses();
-	    ++i;
+	if (valid_) {
+		// keep track of the number of iterations
+		int i = 0;
+		while (abs((mass2_-mass_)/mass_) > DELTAM && i < 20) {	
+			calculatemasses();
+		    calculateperiods();	
+		    // cout << "mass2" << mass2_ << endl;
+		    // cout << "mass" << mass_ << endl;    
+		    ++i;
+		}
+		cout << "iterate " << i << " times" << endl;
+		return period_;	
+	} else {
+		return 0;
 	}
-	calculateperiods();
-	cout << "iterate " << i << " times" << endl;	
+	
 }
 
-vector<vector<double>> TTauriStar::getvectors(string vectorname1, string vectorname2)
+vector<double> TTauriStar::getvector(int n)
 {
-	vector<double> vector1;
-	vector<double> vector2;
-	if (vectorname1 == "Age") {
-		vector1 = ages_;
+	vector<double> output;
+	if (n == 1) {
+		output = ages_;
 	}
-	if (vectorname1 == "Mass") {
-		vector1 = masses_;
+	if (n == 2) {
+		output = masses_;
 	}
-	if (vectorname1 == "Period") {
-		vector1 = periods_;
+	if (n == 3) {
+		output = periods_;
 	}
-	if (vectorname1 == "Acceff") {
-		vector1 = acceffs_;
+	if (n == 4) {
+		output = massdots_;
 	}
-	if (vectorname1 == "Radius") {
-		vector1 = radii_;
+	if (n == 5) {
+		output = radii_;
 	}
-	if (vectorname1 == "RM") {
-		vector1 = rms_;
+	if (n == 6) {
+		output = rms_;
 	}
-	if (vectorname2 == "Age") {
-		vector2 = ages_;
+	if (n == 7) {
+		output = diskdensities_;
 	}
-	if (vectorname2 == "Mass") {
-		vector2 = masses_;
+	if (n == 8) {
+		output = acceffs_;
 	}
-	if (vectorname2 == "Period") {
-		vector2 = periods_;
-	}
-	if (vectorname2 == "Acceff") {
-		vector2 = acceffs_;
-	}
-	if (vectorname2 == "Radius") {
-		vector2 = radii_;
-	}
-	if (vectorname2 == "RM") {
-		vector2 = rms_;
-	}
-	vector<vector<double>> output;
-	output.push_back(vector1);
-	output.push_back(vector2);
+
 	return output;
+}
+
+string TTauriStar::getname(int n)
+{
+	string output;
+	if (n == 1) {
+		output = "Age";
+	}
+	if (n == 2) {
+		output = "Mass";
+	}
+	if (n == 3) {
+		output = "Period";
+	}
+	if (n == 4) {
+		output = "Accretion rate";
+	}
+	if (n == 5) {
+		output = "Radius";
+	}
+	if (n == 6) {
+		output = "R_M";
+	}
+	if (n == 7) {
+		output = "Disk density";
+	}
+	if (n == 8) {
+		output = "Acceff";
+	}
+
+	return output;
+}
+
+string TTauriStar::getunit(int n)
+{
+	string output;
+	if (n == 1) {
+		output = "Myr";
+	}
+	if (n == 2) {
+		output = "solar mass";
+	}
+	if (n == 3) {
+		output = "day";
+	}
+	if (n == 4) {
+		output = "solar mass/year";		
+	}
+	if (n == 5) {
+		output = "solar radius";
+	}
+	if (n == 6) {
+		output = "solar radius";
+	}
+	if (n == 7) {
+		output = "g/cm^2";
+	}
+	if (n == 8) {
+		output = "";
+	}
+
+	return output;
+}
+
+void TTauriStar::plot(int m, int n)
+{
+	vector<double> vector1 = getvector(m);
+	vector<double> vector2 = getvector(n);
+    FILE * temp1 = fopen("data.temp", "w");
+    FILE* gp1=popen("gnuplot -persistent","w");
+    for(size_t k=0;k<vector1.size();k++) {
+        fprintf(temp1,"%f %f \n",vector1[k],vector2[k]);
+    }
+    fprintf(gp1, "%s%s %s %s%s\n", "set title \"",getname(n).data(),"vs",getname(m).data(),"\"");
+
+    fprintf(gp1, "%s%s %s%s%s\n", "set xlabel \"",getname(m).data(),"(",getunit(m).data(),")\"");
+    fprintf(gp1, "%s%s %s%s%s\n", "set ylabel \"",getname(n).data(),"(",getunit(n).data(),")\"");
+    fprintf(gp1, "%s \n", "plot 'data.temp'");
 }
