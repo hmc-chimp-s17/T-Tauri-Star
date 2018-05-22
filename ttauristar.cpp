@@ -33,6 +33,8 @@ TTauriStar::TTauriStar(vector<vector<double>> cmktable,
 	} else {
 		valid_ = true;
 	}
+	// initialize mass0_
+	mass0_ = mass;
 	// initialize mass2_
 	mass2_ = 0;
 	// set propeller endtime to be the same as starttime
@@ -140,7 +142,7 @@ void TTauriStar::calculatemasses()
 	// clear vectors involved
 	masses_.clear();
 	// initial values
-	masses_.push_back(mass_);
+	masses_.push_back(mass0_);
 	// go backwards in time
 	for (size_t i = ages_.size() - 1; i >= 1; --i) {
 		// retrieve age and acceff
@@ -235,7 +237,7 @@ double TTauriStar::update()
 	if (valid_) {
 		// keep track of the number of iterations
 		int i = 0;
-		while (abs((mass2_-mass_)/mass_) > DELTAM && i < 20) {	
+		while (abs((mass2_-mass0_)/mass0_) > DELTAM && i < 20) {	
 			calculatemasses();
 		    calculateperiods();	
 		    // cout << "mass2" << mass2_ << endl;

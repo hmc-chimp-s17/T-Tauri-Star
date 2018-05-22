@@ -50,7 +50,8 @@ private:
 	double diskdensity_;
 	double propendtime_;
 	double acceff_;             /// fraction of deposition by accretion
-	double mass2_;              /// mass calculated when going forward
+	double mass0_;              /// mass that we are trying to converging to
+	double mass2_;              /// mass calculated going forward 
 
 	bool valid_;
 	
