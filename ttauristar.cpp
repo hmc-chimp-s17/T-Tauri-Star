@@ -25,7 +25,8 @@ double const DELTAM = 0.0002;            /// deltam to determine when to stop
 
 TTauriStar::TTauriStar(vector<vector<double>> cmktable, 
 	double mass, double age, double massdotfactor)
-    :cmktable_(cmktable), mass_(mass), age_(age), massdotfactor_(massdotfactor)
+    :cmktable_(cmktable), mass_(mass), mass0_(mass), mass2_(0), 
+    age_(age), massdotfactor_(massdotfactor)
 {
 	// iniliatize validity
 	if (mass > 3) {
@@ -33,8 +34,6 @@ TTauriStar::TTauriStar(vector<vector<double>> cmktable,
 	} else {
 		valid_ = true;
 	}
-	// initialize mass2_
-	mass2_ = 0;
 	// set propeller endtime to be the same as starttime
 	propendtime_ = PROPSTARTTIME;
 	acceff_ = 1.0;
@@ -140,7 +139,7 @@ void TTauriStar::calculatemasses()
 	// clear vectors involved
 	masses_.clear();
 	// initial values
-	masses_.push_back(mass_);
+	masses_.push_back(mass0_);
 	// go backwards in time
 	for (size_t i = ages_.size() - 1; i >= 1; --i) {
 		// retrieve age and acceff
@@ -235,7 +234,7 @@ double TTauriStar::update()
 	if (valid_) {
 		// keep track of the number of iterations
 		int i = 0;
-		while (abs((mass2_-mass_)/mass_) > DELTAM && i < 20) {	
+		while (abs((mass2_-mass0_)/mass0_) > DELTAM && i < 50) {	
 			calculatemasses();
 		    calculateperiods();	
 		    // cout << "mass2" << mass2_ << endl;
@@ -352,6 +351,8 @@ void TTauriStar::plot(int m, int n)
     for(size_t k=0;k<vector1.size();k++) {
         fprintf(temp1,"%f %f \n",vector1[k],vector2[k]);
     }
+    fprintf(gp1, "%s \n", "set terminal postscript eps enhanced color font 'Helvetica,10'");
+    fprintf(gp1, "%s \n", "set output 'singlestar.eps'");
     fprintf(gp1, "%s%s %s %s%s\n", "set title \"",getname(n).data(),"vs",getname(m).data(),"\"");
 
     fprintf(gp1, "%s%s %s%s%s\n", "set xlabel \"",getname(m).data(),"(",getunit(m).data(),")\"");

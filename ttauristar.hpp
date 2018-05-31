@@ -40,6 +40,8 @@ private:
 	// TTauriStar data members
 	vector<vector<double>> cmktable_;
 	double mass_;
+	double mass0_;              /// mass that we are trying to converging to
+	double mass2_;              /// mass calculated going forward 
 	double age_;
 	double massdotfactor_;
 	double massdot_;            /// M_sun/yr
@@ -50,7 +52,6 @@ private:
 	double diskdensity_;
 	double propendtime_;
 	double acceff_;             /// fraction of deposition by accretion
-	double mass2_;              /// mass calculated when going forward
 
 	bool valid_;
 	

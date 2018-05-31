@@ -231,12 +231,14 @@ void plotstartable(vector<vector<double>> startable)
     for(size_t k=0;k<startable[0].size();k++) {
         fprintf(temp2,"%f %f \n",startable[0][k],startable[1][k]);
     }
+    fprintf(gp2, "%s \n", "set terminal postscript eps enhanced color font 'Helvetica,10'");
+    fprintf(gp2, "%s \n", "set output 'NGC2264.eps'");
     fprintf(gp2, "%s%s %s \n", "set title \"","NGC2264","\""); 
+    //fprintf(gp2, "%s%s %s \n", "set title \"","NGC2264","\""); 
 
     fprintf(gp2, "%s \n", "set xlabel \"LogMass\"");
     fprintf(gp2, "%s \n", "set ylabel \"LogAge\"");
     fprintf(gp2, "%s \n", "plot 'star.temp'");
-    
 }
 
 /**
@@ -256,6 +258,8 @@ void plothistogram(vector<double> periods1, vector<double> periods2)
         fprintf(temp2,"%f \n",periods2[k]);
     }
 
+    fprintf(gp3, "%s \n", "set terminal postscript eps enhanced color font 'Helvetica,10'");
+    fprintf(gp3, "%s \n", "set output 'test.eps'");
     fprintf(gp3, "%s\n", "binwidth=1");
     fprintf(gp3, "%s\n", "set boxwidth binwidth");
     fprintf(gp3, "%s\n", "bin(x,width)=width*floor(x/width) + binwidth/2.0");
@@ -272,12 +276,51 @@ void plothistogram(vector<double> periods1, vector<double> periods2)
     fprintf(gp3, "%s \n", "unset multiplot");
 }
 
-int main()
-{     
-    // number of stars
-    size_t n = 200;
+/**
+ * \brief plot observed ONC period distribution
+ * 
+ * \returns             
+ */
+
+void plotdistribution()
+{
+    // herbst (2002) data
+    ifstream infile("herbst.txt");
+    string line;
+    // skip the first line
+    getline(infile, line);
+    double period, mass, disgard;
+    vector<double> periods1, periods2;
+    while (infile >> disgard >> period >> disgard >> disgard >> mass >> disgard) {
+        if (period > 0.001) {
+            if (mass < 0.25) {
+                periods1.push_back(period);
+            } else {
+                periods2.push_back(period);
+            }
+        } 
+    }
+    // plot
+    plothistogram(periods1, periods2);
+}
+
+/**
+ * \brief simulation of n stars
+ *  
+ * \param cluster 1=ONC, 2=NGC
+ * \returns             
+ */
+void simulation(size_t n, size_t cluster)
+{
     // sample from a given cluster
-    vector<vector<double>> startable = readcluster("dahm.txt");
+    vector<vector<double>> startable;
+    if (cluster == 1) {
+        startable = readcluster("hillenbrand.txt");
+    } else if (cluster == 2) {
+        startable = readcluster("dahm.txt");
+    }
+    
+    // simulate a startable of size n
     vector<vector<double>> simstartable = generatedistribution(startable,n);
     // plotstartable(startable);
     // compute cmk table
@@ -287,27 +330,41 @@ int main()
     std::clock_t start;
     double duration;
     start = std::clock();
+    FILE * datafile = fopen("simulationONC.txt", "w");
+    // write first line
+    fprintf(datafile,"%s \n","mass(solarmass) age(Myr)        period(days)");
     vector<double> periods1, periods2;
     for (size_t i = 0; i < n; ++i) {
         double mass = pow(10,simstartable[0][i]);
         double age = pow(10,simstartable[1][i]);
-        cout << "mass: " << mass << "solar mass; Age: " << age << endl; 
         TTauriStar star = TTauriStar(cmktable, mass, age, 1);
         double period = star.update();
+        // write to file
+        fprintf(datafile,"%f        %f        %f \n",mass,age,period);
         if (period > 0.001) {
             if (mass < 0.25) {
                 periods1.push_back(period);
             } else {
                 periods2.push_back(period);
             }
-            //star.plot(1,3);
+            //star.plot(1,2);
         }     
     }   
     duration = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
     std::cout<<"printf: "<< duration <<'\n';
-
     // plot
     plothistogram(periods1, periods2);
+}
+int main()
+{   
+    // simulation(1000, 1);
+    // plotdistribution();
+
+    // compute cmk table
+    vector<vector<double>> cmktable = readcmk("cmkdata.txt");
+    TTauriStar star = TTauriStar(cmktable, 0.68, 1, 1);
+    star.update();
+    star.plot(1,3);
     return 0;
 }
 
