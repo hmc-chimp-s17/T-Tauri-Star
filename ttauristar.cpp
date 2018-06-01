@@ -20,13 +20,13 @@ double const CRITICALDENSITY = 250;  /// accretion disk density cutoff 6e-4
 double const PROPSTARTTIME = 0.05;   /// B-field turn-on time; simulation starts at this time
 double const TURNONTIME = 0.05;      /// should be the same as above
 // double const PROPTIMESPREAD = 0.002; /// introduce randomness for PROPSTARTTIME
-double const BFIELD = 1.67;           /// fieldstrength is set to be a CONSTANT!!!!  NEEDS TO CHANGE in the simulation and become an input parameter!!!!!
 double const DELTAM = 0.01;            /// deltam to determine when to stop mass iterations
 
 TTauriStar::TTauriStar(vector<vector<double>> cmktable, 
-	double mass, double age, double massdotfactor)
+	double mass, double age, double massdotfactor, double bfieldstrength)
+	// same as setting mass_=mass in the body
     :cmktable_(cmktable), mass_(mass), mass0_(mass), mass2_(0), 
-     age_(age), massdotfactor_(massdotfactor) // same as setting mass_=mass in the body
+     age_(age), massdotfactor_(massdotfactor), bfieldstrength_(bfieldstrength)
 
 {
 	// initialize validity
@@ -121,7 +121,7 @@ double TTauriStar::calculatebfield()
 	// THINK ABOUT THE RELATION TO PROPSTART TIME!!!!!
 
 	if (age_ > TURNONTIME) {
-		return BFIELD;
+		return bfieldstrength_;
 	} else {
 		return 0;
 	}

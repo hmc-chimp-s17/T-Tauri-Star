@@ -338,7 +338,7 @@ void simulation(size_t n, size_t cluster)
     for (size_t i = 0; i < n; ++i) {
         double mass = pow(10,simstartable[0][i]);
         double age = pow(10,simstartable[1][i]);
-        TTauriStar star = TTauriStar(cmktable, mass, age, 1);
+        TTauriStar star = TTauriStar(cmktable, mass, age, 1, 1.67);
         double period = star.update();
         // write to file
         fprintf(datafile,"%f        %f        %f \n",mass,age,period);
@@ -369,7 +369,7 @@ int main(int argc, char *argv[])
             // compute cmk table
             vector<vector<double>> cmktable = readcmk("cmkdata.txt");
             // create a star
-            TTauriStar star = TTauriStar(cmktable, 0.68, 1, 1);
+            TTauriStar star = TTauriStar(cmktable, 0.68, 1, 1, 1.67);
             star.update();
             star.plot(1,3);
         } else {

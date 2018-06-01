@@ -20,14 +20,16 @@ using namespace std;
  * \brief Represents a T Tauri Star through out its evolution.
  *
  * \details The first parameter is a pointer matrix to the mass-age-radius table, 
- *          mass and age are the final values for a particular star 
- *          massdotfactor is the rendomization Mdot parameter. 
+ *          mass and age are the final values for a particular star,
+ *          massdotfactor is the randomization Mdot parameter, 
+ *          bfieldstrength is the randomization magnetirc field strength.
  */
 class TTauriStar {
 public:
 
 	
-	TTauriStar(vector<vector<double>> cmktable, double mass, double age, double massdotfactor);
+	TTauriStar(vector<vector<double>> cmktable, double mass, double age, 
+		double massdotfactor, double bfieldstrength);
 	/**
 	 * \brief update runs the simulation for each star until convergence.
 	 *
@@ -87,6 +89,7 @@ private:
 	double mass2_;              /// mass calculated going forward to test for convergence against mass0
 	double age_;
 	double massdotfactor_;      /// equal to the original input parameter
+	double bfieldstrength_;
 	double massdot_;            /// M_sun/yr
 	double period_;
 	double radius_;
