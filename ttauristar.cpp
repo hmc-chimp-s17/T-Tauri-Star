@@ -20,7 +20,7 @@ double const CRITICALDENSITY = 250;  /// accretion disk density cutoff 6e-4
 double const PROPSTARTTIME = 0.05;   /// B-field turn-on time; simulation starts at this time
 double const TURNONTIME = 0.05;      /// should be the same as above
 // double const PROPTIMESPREAD = 0.002; /// introduce randomness for PROPSTARTTIME
-double const DELTAM = 0.01;            /// deltam to determine when to stop mass iterations
+double const DELTAM = 0.001;            /// deltam to determine when to stop mass iterations
 
 TTauriStar::TTauriStar(vector<vector<double>> cmktable, 
 	double mass, double age, double massdotfactor, double bfieldstrength)
@@ -37,18 +37,20 @@ TTauriStar::TTauriStar(vector<vector<double>> cmktable,
 	}
 	// set propeller endtime to be the same as starttime
 	propendtime_ = PROPSTARTTIME;
-	acceff_ = 1.0;
+	acceff_ = 0;
 	// save initial values of age and acceff in the corresponding vectors
-	ages_.push_back(age_);
-	acceffs_.push_back(acceff_);
 	// go backwards in time
-	while (age_ > PROPSTARTTIME) {
-		// calculate new age
-		age_ -= TIMESTEP;
+	while (age_ > 0) {
 		// push_back the age into the ages vector
 		// will also be reversed later
 		ages_.push_back(age_);
-		acceffs_.push_back(acceff_);
+		if (age_ < PROPSTARTTIME) {
+			acceffs_.push_back(0);
+		} else {
+			acceffs_.push_back(1);
+		}	
+		// calculate new age
+		age_ -= TIMESTEP;
 	}
 	// reverse the two vectors to be in forward time order
 	reverse(ages_.begin(),ages_.end());
@@ -177,6 +179,7 @@ void TTauriStar::calculateperiods()
 	mass_ = masses_[0];
 	age_ = ages_[0];
 	radius_ = calculateradius();
+	massdot_ = calculatemassdot();
 	// initial phase
 	size_t phase = 1;
 	// go forward in time
@@ -203,7 +206,7 @@ void TTauriStar::calculateperiods()
 		
 		// Calculate the periods 
 		// Phase 1: spin at break-up period.  SHOULD ALLOW FOR MORE THAT ONE POINT!!!!
-		if (i == 0 && phase <= 1) {
+		if (age_ < PROPSTARTTIME && phase <= 1) {
 	    	period_ = 0.1159*pow(radius_,3./2.)*pow(mass_,-1./2.);	
 	    	// doesn't accrete
 	    	acceff_ = 0;
@@ -232,6 +235,7 @@ void TTauriStar::calculateperiods()
 			// SHOULD the acceff=0 here?!!!!!!
 		}
 
+		// cout << phase << endl;
 		// calculate mass moving forward
 		if (i < ages_.size() - 1) {
 			mass2_ += 1.0e6*massdot_*acceff_*TIMESTEP;
@@ -364,17 +368,19 @@ void TTauriStar::plot(int m, int n)
 {
     vector<double> vector1 = getvector(m);
     vector<double> vector2 = getvector(n);
-    FILE * temp1 = fopen("data.temp", "w"); // * is for a pointer; "w" means write, could also be "r" for read.
-    FILE* gp1=popen("gnuplot -persistent","w"); //popen opens a plotting window 
+    FILE * temp = fopen("data.temp", "w"); // * is for a pointer; "w" means write, could also be "r" for read.
+    FILE* gp=popen("gnuplot -persistent","w"); //popen opens a plotting window 
     for(size_t k=0;k<vector1.size();k++) {
-        fprintf(temp1,"%f %f \n",vector1[k],vector2[k]); 
+        fprintf(temp,"%f %f \n",vector1[k],vector2[k]); 
     }
-    fprintf(gp1, "%s \n", "set terminal postscript eps enhanced color font 'Helvetica,10'");
-    fprintf(gp1, "%s \n", "set output 'singlestar.eps'");
+    fprintf(gp, "%s \n", "set terminal postscript eps enhanced color font 'Helvetica,10'");
+    fprintf(gp, "%s \n", "set output 'singlestar.eps'");
     // To create a screen output remove previous two lines, but then this image cannot be saved. 
-    fprintf(gp1, "%s%s %s %s%s\n", "set title \"",getname(n).data(),"vs",getname(m).data(),"\"");
+    fprintf(gp, "%s%s %s %s%s\n", "set title \"",getname(n).data(),"vs",getname(m).data(),"\"");
 
-    fprintf(gp1, "%s%s %s%s%s\n", "set xlabel \"",getname(m).data(),"(",getunit(m).data(),")\"");
-    fprintf(gp1, "%s%s %s%s%s\n", "set ylabel \"",getname(n).data(),"(",getunit(n).data(),")\"");
-    fprintf(gp1, "%s \n", "plot 'data.temp'");
+    fprintf(gp, "%s%s %s%s%s\n", "set xlabel \"",getname(m).data(),"(",getunit(m).data(),")\"");
+    fprintf(gp, "%s%s %s%s%s\n", "set ylabel \"",getname(n).data(),"(",getunit(n).data(),")\"");
+    fprintf(gp, "%s \n", "plot 'data.temp'");
+
+    fclose(temp);
 }

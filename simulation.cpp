@@ -120,6 +120,9 @@ vector<vector<double>> readcluster(string fname)
         lineStream >> age;
         // push back log10 of masses and ages
         logmasses.push_back(log10(mass));
+        if (log10(age) < -3) {
+            cout << "mass " << mass << "age " << age << endl;
+        }
         logages.push_back(log10(age)); 
     }
     // store mass, age, radius vectors in cmktable
@@ -147,7 +150,14 @@ vector<vector<double>> generatedistribution(vector<vector<double>> startable, do
     // initialize weights with zeros
     vector<double> logmassweights(nummassbin,0.0);
     // create age bins 
-    vector<double> logagebins{-1.2,-1,-0.8,-0.4,-0.2,0,0.2,0.4};
+    vector<double> logagebins{-1.2,-1,-0.8,-0.4,-0.2,0,0.2,0.4,0.6,0.8,1.0,1.2,1.4,1.6,1.8,2.0};
+    /*
+    double logagemin = -2.0;
+    double logagemax = 3.0;
+    for (size_t i = 0; i <= 10; ++i) {
+        logagebins.push_back(logagemin+(logagemax-logagemin)*i/10);
+    }
+    */
     // number of age bins
     size_t numagebin = logagebins.size() - 1;
     // initilize ages with zeros
@@ -200,6 +210,8 @@ vector<vector<double>> generatedistribution(vector<vector<double>> startable, do
     // random number generator
     random_device rd;
     mt19937 gen(rd());
+
+    // choose n stars from the distribution
     for (size_t i = 0; i < n; ++i){
         double logmass = logmassdist(gen);
         double logage = 0.0;
@@ -224,21 +236,38 @@ vector<vector<double>> generatedistribution(vector<vector<double>> startable, do
  * \param startable  vector of <logmass,logage>
  * \returns             
  */
-void plotstartable(vector<vector<double>> startable)
+void plotstartable(vector<vector<double>> startable, size_t cluster, bool simulated)
 { 
-    FILE * temp2 = fopen("star.temp", "w");
-    FILE* gp2=popen("gnuplot -persistent","w");
+    FILE * temp = fopen("star.temp", "w");
+    FILE* gp=popen("gnuplot -persistent","w");
     for(size_t k=0;k<startable[0].size();k++) {
-        fprintf(temp2,"%f %f \n",startable[0][k],startable[1][k]);
+        fprintf(temp,"%f %f \n",startable[0][k],startable[1][k]);
     }
-    fprintf(gp2, "%s \n", "set terminal postscript eps enhanced color font 'Helvetica,10'");
-    fprintf(gp2, "%s \n", "set output 'NGC2264.eps'");
-    fprintf(gp2, "%s%s %s \n", "set title \"","NGC2264","\""); 
-    //fprintf(gp2, "%s%s %s \n", "set title \"","NGC2264","\""); 
+    fprintf(gp, "%s \n", "set terminal postscript eps enhanced color font 'Helvetica,10'");
+    if (cluster == 1) {
+        if (simulated == false) {
+            fprintf(gp, "%s \n", "set output 'ONC.eps'");
+            fprintf(gp, "%s%s %s \n", "set title \"","ONC","\"");
+        } else {
+            fprintf(gp, "%s \n", "set output 'simulatedONC.eps'");
+            fprintf(gp, "%s%s %s \n", "set title \"","simulatedONC","\"");
+        }
+        fprintf(gp, "%s \n", "set yrange [-5:3]");
+    } else {
+        if (simulated == false) {
+            fprintf(gp, "%s \n", "set output 'NGC2264.eps'");
+            fprintf(gp, "%s%s %s \n", "set title \"","NGC2264","\"");
+        } else {
+            fprintf(gp, "%s \n", "set output 'simulatedNGC2264.eps'");
+            fprintf(gp, "%s%s %s \n", "set title \"","simulatedNGC2264","\"");
+        }
+    } 
 
-    fprintf(gp2, "%s \n", "set xlabel \"LogMass\"");
-    fprintf(gp2, "%s \n", "set ylabel \"LogAge\"");
-    fprintf(gp2, "%s \n", "plot 'star.temp'");
+    fprintf(gp, "%s \n", "set xlabel \"LogMass\"");
+    fprintf(gp, "%s \n", "set ylabel \"LogAge\"");
+    fprintf(gp, "%s \n", "plot 'star.temp'");
+
+    fclose(temp);
 }
 
 /**
@@ -260,7 +289,7 @@ void plothistogram(vector<double> periods1, vector<double> periods2)
     }
 
     fprintf(gp3, "%s \n", "set terminal postscript eps enhanced color font 'Helvetica,10'");
-    fprintf(gp3, "%s \n", "set output 'test.eps'");
+    fprintf(gp3, "%s \n", "set output 'distribution.eps'");
     fprintf(gp3, "%s\n", "binwidth=1");
     fprintf(gp3, "%s\n", "set boxwidth binwidth");
     fprintf(gp3, "%s\n", "bin(x,width)=width*floor(x/width) + binwidth/2.0");
@@ -275,6 +304,9 @@ void plothistogram(vector<double> periods1, vector<double> periods2)
     fprintf(gp3, "%s%s %s \n", "set label 1\"","m > 0.25 solar mass","\" at graph 0.8,0.9");
     fprintf(gp3, "%s \n", "plot 'periods2.temp' using (bin($1,binwidth)):(1.0) smooth freq with boxes notitle");
     fprintf(gp3, "%s \n", "unset multiplot");
+
+    fclose(temp1);
+    fclose(temp2);
 }
 
 /**
@@ -311,37 +343,37 @@ void plotdistribution()
  * \param cluster 1=ONC, 2=NGC
  * \returns             
  */
-void simulation(size_t n, size_t cluster)
+void simulation(vector<vector<double>> simstartable)
 {
-    // sample from a given cluster
-    vector<vector<double>> startable;
-    if (cluster == 1) {
-        startable = readcluster("hillenbrand.txt");
-    } else if (cluster == 2) {
-        startable = readcluster("dahm.txt");
-    }
-    
-    // simulate a startable of size n
-    vector<vector<double>> simstartable = generatedistribution(startable,n);
-    // plotstartable(startable);
     // compute cmk table
     vector<vector<double>> cmktable = readcmk("cmkdata.txt");
-    // loop throough the stars
-    
+
+    // generator
+    default_random_engine genm;
+    default_random_engine genb;
+    // normal distribution of massfactor
+    normal_distribution<double> mdotfactordist(1.0,0.1);
+    // normal distribution of bfieldstrength
+    normal_distribution<double> bfielddist(1.67,0.1);
+
+    // loop through the stars 
     std::clock_t start;
     double duration;
     start = std::clock();
-    FILE * datafile = fopen("simulationONC.txt", "w");
+    FILE * datafile;
+    datafile = fopen("simulationONC.txt", "w");
     // write first line
-    fprintf(datafile,"%s \n","mass(solarmass) age(Myr)        period(days)");
+    fprintf(datafile,"%s \n","mass(solarmass) age(Myr)        period(days)    massdotfactor   bfield(kG)");
     vector<double> periods1, periods2;
-    for (size_t i = 0; i < n; ++i) {
+    for (size_t i = 0; i < simstartable[0].size(); ++i) {
         double mass = pow(10,simstartable[0][i]);
         double age = pow(10,simstartable[1][i]);
-        TTauriStar star = TTauriStar(cmktable, mass, age, 1, 1.67);
+        double mdotfactor = mdotfactordist(genm);
+        double bfieldstrength = bfielddist(genb);
+        TTauriStar star = TTauriStar(cmktable, mass, age, mdotfactor, bfieldstrength);
         double period = star.update();
         // write to file
-        fprintf(datafile,"%f        %f        %f \n",mass,age,period);
+        fprintf(datafile,"%f        %f        %f        %f        %f \n",mass,age,period,mdotfactor,bfieldstrength);
         if (period > 0.001) {
             if (mass < 0.25) {
                 periods1.push_back(period);
@@ -350,9 +382,10 @@ void simulation(size_t n, size_t cluster)
             }
             //star.plot(1,2);
         }     
-    }   
+    }  
+    fclose(datafile); 
     duration = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
-    std::cout<<"printf: "<< duration <<'\n';
+    std::cout<<"the program takes "<< duration << " s" << endl;
     // plot
     plothistogram(periods1, periods2);
 }
@@ -369,13 +402,22 @@ int main(int argc, char *argv[])
             // compute cmk table
             vector<vector<double>> cmktable = readcmk("cmkdata.txt");
             // create a star
-            TTauriStar star = TTauriStar(cmktable, 0.68, 1, 1, 1.67);
+            TTauriStar star = TTauriStar(cmktable, 0.68, 0.1, 1, 1.67);
             star.update();
             star.plot(1,3);
         } else {
             // Simuate a cluster: 1 = ONC, 2 = NGC 2264 
-            simulation(1000, 1);}
+            // sample from a given cluster
+            vector<vector<double>> startable;
+            startable = readcluster("hillenbrand.txt");
+            //startable = readcluster("dahm.txt");
+            // plotstartable(startable, 2, false);
+            // simulate a startable of size n
+            vector<vector<double>> simstartable = generatedistribution(startable,1000);
+            plotstartable(simstartable, 1, true);
+            // simulation(simstartable);
         }
+    }
     // Plot the observed period distribution for ONC
     // plotdistribution();
 
