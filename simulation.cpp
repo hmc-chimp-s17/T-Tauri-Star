@@ -3,7 +3,7 @@
  *
  * \authors Cynthia Yan
  *
- * \brief Provides the main() function for simulating one ttauri star
+ * \brief Provides the main() function for simulating a ttauri star cluster or one star; defines other helper functions not associated with TTauriStar class. 
  */
 
 #include <iostream>
@@ -219,7 +219,7 @@ vector<vector<double>> generatedistribution(vector<vector<double>> startable, do
 }
 
 /**
- * \brief plot startable
+ * \brief plot startable, a 2-D vector of star values
  * 
  * \param startable  vector of <logmass,logage>
  * \returns             
@@ -242,8 +242,9 @@ void plotstartable(vector<vector<double>> startable)
 }
 
 /**
- * \brief plot histogram
+ * \brief plot period histogram, 
  * 
+ * \param periods1 for stars with mass < 0.25 and periods2 for stars with mass > 0.25
  * \returns             
  */
 void plothistogram(vector<double> periods1, vector<double> periods2)
@@ -355,16 +356,29 @@ void simulation(size_t n, size_t cluster)
     // plot
     plothistogram(periods1, periods2);
 }
-int main()
-{   
-    // simulation(1000, 1);
+
+/*The main program
+ */
+int main(int argc, char *argv[])
+{  
+    cout << "Type 1 for single-star simulation, type 2 for cluster simulation" << endl;
+    
+    if (argc >=2) {
+        int arg = stoi(argv[1]);
+        if (arg==1) {
+            // compute cmk table
+            vector<vector<double>> cmktable = readcmk("cmkdata.txt");
+            // create a star
+            TTauriStar star = TTauriStar(cmktable, 0.68, 1, 1);
+            star.update();
+            star.plot(1,3);
+        } else {
+            // Simuate a cluster: 1 = ONC, 2 = NGC 2264 
+            simulation(1000, 1);}
+        }
+    // Plot the observed period distribution for ONC
     // plotdistribution();
 
-    // compute cmk table
-    vector<vector<double>> cmktable = readcmk("cmkdata.txt");
-    TTauriStar star = TTauriStar(cmktable, 0.68, 1, 1);
-    star.update();
-    star.plot(1,3);
     return 0;
 }
 
