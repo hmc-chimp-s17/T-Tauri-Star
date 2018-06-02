@@ -98,6 +98,8 @@ private:
 	double diskdensity_;        /// surface density ar R_M
 	double propendtime_;        /// end time for the propeller effect
 	double acceff_;             /// fraction of deposition by accretion
+	double mass0_;              /// mass that we are trying to converging to
+	double mass2_;              /// mass calculated going forward 
 
 	bool valid_;  /// if the mass is > 3, there are not values in the table, so we drop stars with those masses. 
 	//This should be changed in the future with better data tables.

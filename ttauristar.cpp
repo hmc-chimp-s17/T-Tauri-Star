@@ -35,6 +35,10 @@ TTauriStar::TTauriStar(vector<vector<double>> cmktable,
 	} else {
 		valid_ = true;
 	}
+	// initialize mass0_
+	mass0_ = mass;
+	// initialize mass2_
+	mass2_ = 0;
 	// set propeller endtime to be the same as starttime
 	propendtime_ = PROPSTARTTIME;
 	acceff_ = 0;
