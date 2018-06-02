@@ -3,12 +3,12 @@
  *
  * \authors Cynthia Yan
  *
- * \brief Implements the TTauriStar class.
+ * \brief Implements the TTauriStar class.  This is a bunch of definitions.
  */
 
 #include "ttauristar.hpp"
 
-using namespace std;
+using namespace std;  /// a library of functions
 
 double const TIMESTEP = 0.004;       /// timestep
 double const ALPHA = 0.01;           /// viscocity parameter
@@ -16,18 +16,20 @@ double const BETA = 1.35;            /// R_M/R_A
 double const GAMMA = 1.0;            /// R_C/R_M
 //double const SHAPEFACTOR = 0.17;     /// f in the rotational inertia I=fMR^2
 double const PROPEFF = 0.3;          /// propeller coefficient
-double const CRITICALDENSITY = 250; /// accretion disk density cutoff 6e-4
-double const PROPSTARTTIME = 0.05;   /// simulation starts at this time
-double const TURNONTIME = 0.05;
+double const CRITICALDENSITY = 250;  /// accretion disk density cutoff 6e-4
+double const PROPSTARTTIME = 0.05;   /// B-field turn-on time; simulation starts at this time
+double const TURNONTIME = 0.05;      /// should be the same as above
 // double const PROPTIMESPREAD = 0.002; /// introduce randomness for PROPSTARTTIME
-double const BFIELD = 1.67;           /// fieldstrength is set to be a constant
-double const DELTAM = 0.0002;            /// deltam to determine when to stop
+double const DELTAM = 0.001;            /// deltam to determine when to stop mass iterations
 
 TTauriStar::TTauriStar(vector<vector<double>> cmktable, 
-	double mass, double age, double massdotfactor)
-    :cmktable_(cmktable), mass_(mass), age_(age), massdotfactor_(massdotfactor)
+	double mass, double age, double massdotfactor, double bfieldstrength)
+	// same as setting mass_=mass in the body
+    :cmktable_(cmktable), mass_(mass), mass0_(mass), mass2_(0), 
+     age_(age), massdotfactor_(massdotfactor), bfieldstrength_(bfieldstrength)
+
 {
-	// iniliatize validity
+	// initialize validity
 	if (mass > 3) {
 		valid_ = false;
 	} else {
@@ -39,18 +41,20 @@ TTauriStar::TTauriStar(vector<vector<double>> cmktable,
 	mass2_ = 0;
 	// set propeller endtime to be the same as starttime
 	propendtime_ = PROPSTARTTIME;
-	acceff_ = 1.0;
-	// starting values of age and acceff
-	ages_.push_back(age_);
-	acceffs_.push_back(acceff_);
+	acceff_ = 0;
+	// save initial values of age and acceff in the corresponding vectors
 	// go backwards in time
-	while (age_ > PROPSTARTTIME) {
-		// calculate new age
-		age_ -= TIMESTEP;
+	while (age_ > 0) {
 		// push_back the age into the ages vector
 		// will also be reversed later
 		ages_.push_back(age_);
-		acceffs_.push_back(1.0);
+		if (age_ < PROPSTARTTIME) {
+			acceffs_.push_back(0);
+		} else {
+			acceffs_.push_back(1);
+		}	
+		// calculate new age
+		age_ -= TIMESTEP;
 	}
 	// reverse the two vectors to be in forward time order
 	reverse(ages_.begin(),ages_.end());
@@ -59,26 +63,31 @@ TTauriStar::TTauriStar(vector<vector<double>> cmktable,
 
 double TTauriStar::calculatemassdot()
 {
-	// massdot has unit M_sun/yr
+	// caculates and returns current value of Mdot.
+	// massdot has unit M_sun/yr  
 	return 7.0e-8*massdotfactor_*pow(age_,-2.1)*pow(mass_,2.43);
 }
 
 double TTauriStar::calculateradius()
 {
-	size_t index1 = 0;
+
+	size_t index1 = 0; // natural number data type
 	size_t index3 = 0;
 
 	// find masslower and massupper such that masslower <= mass < massupper
-	double masslower = cmktable_[0][0];
+	double masslower = cmktable_[0][0]; // [column][row], column = 0 is mass, 1 is age, 2 is radius
 	double massupper = cmktable_[0][0];
 	while (cmktable_[0][index3] <= mass_) {
-        if (cmktable_[0][index3] > masslower) {
+	    if (cmktable_[0][index3] > masslower) {
         	index1 = index3;
         	masslower = cmktable_[0][index3];
-        }
-		++index3;
+            }
+	    ++index3;
 	}
+	// At this point index1 is the first row # of the masslower block.
+	// and index3 is the first row # of the massupper block.
 	massupper = cmktable_[0][index3];
+
 	// find agelower1 and ageupper1 such that agelower1 <= age < ageupper1
 	double agelower1 = cmktable_[1][index1];
 	double ageupper1 = cmktable_[1][index1];
@@ -115,9 +124,10 @@ double TTauriStar::calculateradius()
 double TTauriStar::calculatebfield()
 {
 	// turn on a constant dipole magnetic field at some input time
-	
+	// THINK ABOUT THE RELATION TO PROPSTART TIME!!!!!
+
 	if (age_ > TURNONTIME) {
-		return BFIELD;
+		return bfieldstrength_;
 	} else {
 		return 0;
 	}
@@ -125,16 +135,14 @@ double TTauriStar::calculatebfield()
 
 double TTauriStar::calculaterm()
 {
-	// radius at which rom pressure equals magnetic pressure
+	// radius at which ram pressure equals magnetic pressure*BETA (magnetispheric radius)
 	return radius_*7.1883*BETA*pow(mass_/0.5,-1./7.)*pow(bfield_,4./7.)*pow(radius_/2.,5./7.)*pow(massdot_/1.e-8,-2./7.);
 }
 
 double TTauriStar::calculatediskdensity()
 {
-	// ratio of moment of inertia and mass*radius^2
-	double f = pow(1.0-pow(radius_/rm_,0.5),1.0/4.0);
 	// density of accretion disk at rm
-	return 8.79e6*pow(ALPHA,-4.0/5.0)*pow(massdot_,0.7)*pow(mass_,0.25)*pow(rm_,-0.75)*pow(f,14.0/5.0);
+	return 8.79e6*pow(ALPHA,-4.0/5.0)*pow(massdot_,0.7)*pow(mass_,0.25)*pow(rm_,-0.75)*pow(1.0-pow(radius_/rm_,0.5),7.0/10.0);
 }
 
 void TTauriStar::calculatemasses()
@@ -171,6 +179,11 @@ void TTauriStar::calculateperiods()
 	acceffs_.clear();
 	// initialze mass2_
 	mass2_ = masses_[0];
+	// initialize radius_ !!!!!
+	mass_ = masses_[0];
+	age_ = ages_[0];
+	radius_ = calculateradius();
+	massdot_ = calculatemassdot();
 	// initial phase
 	size_t phase = 1;
 	// go forward in time
@@ -186,19 +199,23 @@ void TTauriStar::calculateperiods()
 		acceff_ = 1;
 		// update data members
 		massdot_ = calculatemassdot();
-		double radius = radius_;
+		double radius = radius_; 
 		radius_ = calculateradius();
 		bfield_ = calculatebfield();
 		rm_ = calculaterm();
 		diskdensity_ = calculatediskdensity();
-		// calculate the period at rm
-	    double periodrm = 0.1159*pow(rm_,3./2.)*pow(mass_,-1./2.);
-	    // 1. spin at break-up period
-	    if (i == 0 && phase <= 1) {
+
+		// calculate the Keplerian period at rm
+		double periodrm = 0.1159*pow(rm_,3./2.)*pow(mass_,-1./2.);
+		
+		// Calculate the periods 
+		// Phase 1: spin at break-up period.  SHOULD ALLOW FOR MORE THAT ONE POINT!!!!
+		if (age_ < PROPSTARTTIME && phase <= 1) {
 	    	period_ = 0.1159*pow(radius_,3./2.)*pow(mass_,-1./2.);	
 	    	// doesn't accrete
 	    	acceff_ = 0;
-		// 2. spin down due to propeller effect		
+
+		// Phase 2: spin down due to propeller effect		
 		} else if (period_ < periodrm && phase <= 2) {
 			period_ += TIMESTEP*PROPEFF*0.972*pow(BETA,-3.)*pow(period_,2.)*pow(mass_,-4./7.)*pow(bfield_,2./7.)*pow(radius_,-8./7.)*pow(massdot_/1.e-8,6./7.);
 			// keep track of the propeller endtime
@@ -206,18 +223,23 @@ void TTauriStar::calculateperiods()
 			// doesn't accrete
 			acceff_ = 0;
 			phase = 2;
-		// 3. disk-locked
+
+		// Phase 3: disk-locked
 		} else if (diskdensity_ > CRITICALDENSITY && phase <= 3) {
 			period_ = 8.*pow(GAMMA*BETA/0.9288,3./2.)*pow(massdot_/1.0e-8,-3./7.)*pow(mass_/0.5,-5./7.)*pow(radius_/2.,18./7.)*pow(bfield_,6./7.);
 		    phase = 3;
-		// 4. unlocked
+
+		// Phase 4: unlocked
 		} else {
 			// G in units of (solar radius^3)/(day^2 solarmass) G = 2937.5
 			period_ += period_*2*(radius_-radius)/radius_
-			    +TIMESTEP*acceff_*period_*massdot_/mass_
+			        +TIMESTEP*acceff_*period_*massdot_/mass_
 				-50.74*TIMESTEP*acceff_*pow(period_,2)*massdot_/pow(mass_,0.5)*pow(rm_,0.5)*pow(radius_,-2.);
-		    phase = 4;
+		        phase = 4;
+			// SHOULD the acceff=0 here?!!!!!!
 		}
+
+		// cout << phase << endl;
 		// calculate mass moving forward
 		if (i < ages_.size() - 1) {
 			mass2_ += 1.0e6*massdot_*acceff_*TIMESTEP;
@@ -237,14 +259,15 @@ double TTauriStar::update()
 	if (valid_) {
 		// keep track of the number of iterations
 		int i = 0;
-		while (abs((mass2_-mass0_)/mass0_) > DELTAM && i < 20) {	
+		while (abs((mass2_-mass0_)/mass0_) > DELTAM && i < 50) {	
 			calculatemasses();
 		    calculateperiods();	
 		    // cout << "mass2" << mass2_ << endl;
-		    // cout << "mass" << mass_ << endl;    
+		    // cout << "mass" << mass_ << endl;   
 		    ++i;
 		}
-		cout << "iterate " << i << " times" << endl;
+		// Used for debugging.  Printing the iteration value for each star and the error
+     	cout << "iterated " << i << " times" << " Error = "<< (mass2_-mass0_)/mass0_ << " Mass = "<< mass0_ << endl;
 		return period_;	
 	} else {
 		return 0;
@@ -347,16 +370,21 @@ string TTauriStar::getunit(int n)
 
 void TTauriStar::plot(int m, int n)
 {
-	vector<double> vector1 = getvector(m);
-	vector<double> vector2 = getvector(n);
-    FILE * temp1 = fopen("data.temp", "w");
-    FILE* gp1=popen("gnuplot -persistent","w");
+    vector<double> vector1 = getvector(m);
+    vector<double> vector2 = getvector(n);
+    FILE * temp = fopen("data.temp", "w"); // * is for a pointer; "w" means write, could also be "r" for read.
+    FILE* gp=popen("gnuplot -persistent","w"); //popen opens a plotting window 
     for(size_t k=0;k<vector1.size();k++) {
-        fprintf(temp1,"%f %f \n",vector1[k],vector2[k]);
+        fprintf(temp,"%f %f \n",vector1[k],vector2[k]); 
     }
-    fprintf(gp1, "%s%s %s %s%s\n", "set title \"",getname(n).data(),"vs",getname(m).data(),"\"");
+    fprintf(gp, "%s \n", "set terminal postscript eps enhanced color font 'Helvetica,10'");
+    fprintf(gp, "%s \n", "set output 'singlestar.eps'");
+    // To create a screen output remove previous two lines, but then this image cannot be saved. 
+    fprintf(gp, "%s%s %s %s%s\n", "set title \"",getname(n).data(),"vs",getname(m).data(),"\"");
 
-    fprintf(gp1, "%s%s %s%s%s\n", "set xlabel \"",getname(m).data(),"(",getunit(m).data(),")\"");
-    fprintf(gp1, "%s%s %s%s%s\n", "set ylabel \"",getname(n).data(),"(",getunit(n).data(),")\"");
-    fprintf(gp1, "%s \n", "plot 'data.temp'");
+    fprintf(gp, "%s%s %s%s%s\n", "set xlabel \"",getname(m).data(),"(",getunit(m).data(),")\"");
+    fprintf(gp, "%s%s %s%s%s\n", "set ylabel \"",getname(n).data(),"(",getunit(n).data(),")\"");
+    fprintf(gp, "%s \n", "plot 'data.temp'");
+
+    fclose(temp);
 }
