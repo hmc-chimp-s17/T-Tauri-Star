@@ -351,8 +351,8 @@ void simulation(vector<vector<double>> simstartable)
     // generator
     default_random_engine genm;
     default_random_engine genb;
-    // normal distribution of massfactor
-    normal_distribution<double> mdotfactordist(1.0,0.1);
+    // normal distribution of log(massfactor)
+    normal_distribution<double> logmdotfactordist(0.0,0.32);
     // normal distribution of bfieldstrength
     normal_distribution<double> bfielddist(1.67,0.1);
 
@@ -363,17 +363,17 @@ void simulation(vector<vector<double>> simstartable)
     FILE * datafile;
     datafile = fopen("simulationONC.txt", "w");
     // write first line
-    fprintf(datafile,"%s \n","mass(solarmass) age(Myr)        period(days)    massdotfactor   bfield(kG)");
+    fprintf(datafile,"%s \n","mass(solarmass) age(Myr)        period(days)    log(mdotfactor) bfield(kG)");
     vector<double> periods1, periods2;
     for (size_t i = 0; i < simstartable[0].size(); ++i) {
         double mass = pow(10,simstartable[0][i]);
         double age = pow(10,simstartable[1][i]);
-        double mdotfactor = mdotfactordist(genm);
+        double logmdotfactor = logmdotfactordist(genm);
         double bfieldstrength = bfielddist(genb);
-        TTauriStar star = TTauriStar(cmktable, mass, age, mdotfactor, bfieldstrength);
+        TTauriStar star = TTauriStar(cmktable, mass, age, pow(10,logmdotfactor), bfieldstrength);
         double period = star.update();
         // write to file
-        fprintf(datafile,"%f        %f        %f        %f        %f \n",mass,age,period,mdotfactor,bfieldstrength);
+        fprintf(datafile,"%f        %f        %f        %f        %f \n",mass,age,period,logmdotfactor,bfieldstrength);
         if (period > 0.001) {
             if (mass < 0.25) {
                 periods1.push_back(period);
@@ -392,32 +392,54 @@ void simulation(vector<vector<double>> simstartable)
 
 /*The main program
  */
-int main(int argc, char *argv[])
+int main()
 {  
+    size_t typeofsimulation;
     cout << "Type 1 for single-star simulation, type 2 for cluster simulation" << endl;
-    
-    if (argc >=2) {
-        int arg = stoi(argv[1]);
-        if (arg==1) {
-            // compute cmk table
-            vector<vector<double>> cmktable = readcmk("cmkdata.txt");
-            // create a star
-            TTauriStar star = TTauriStar(cmktable, 0.68, 0.1, 1, 1.67);
-            star.update();
-            star.plot(1,3);
-        } else {
-            // Simuate a cluster: 1 = ONC, 2 = NGC 2264 
-            // sample from a given cluster
-            vector<vector<double>> startable;
+    cin >> typeofsimulation;
+    cout << "The value you entered is " << typeofsimulation << endl;
+    if (typeofsimulation == 1) {
+        // mass
+        double mass;
+        cout << "mass: ";
+        cin >> mass;
+        cout << "The mass is " << mass << endl;
+        // age
+        double age;
+        cout << "age: ";
+        cin >> age;
+        cout << "The age is " << age << endl;
+        // compute cmk table
+        vector<vector<double>> cmktable = readcmk("cmkdata.txt");
+        // create a star
+        TTauriStar star = TTauriStar(cmktable, mass, age, 1, 1.67);
+        star.update();
+        star.plot(1,3);
+    } else if (typeofsimulation == 2) {
+        // Simuate a cluster: 1 = ONC, 2 = NGC 2264 
+        size_t cluster;
+        cout << "Which cluster do you want to simulate?" << endl;
+        cout << "Type 1 for ONC, type 2 for NGC2264" << endl;
+        cin >> cluster;
+        cout << "The value you entered is " << cluster << endl;
+        // sample from a given cluster
+        vector<vector<double>> startable;
+        if (cluster == 1) {
             startable = readcluster("hillenbrand.txt");
-            //startable = readcluster("dahm.txt");
-            // plotstartable(startable, 2, false);
-            // simulate a startable of size n
-            vector<vector<double>> simstartable = generatedistribution(startable,1000);
-            plotstartable(simstartable, 1, true);
-            // simulation(simstartable);
+        } else if (cluster == 2) {
+            startable = readcluster("dahm.txt");
+        } else {
+            throw invalid_argument( "Invalid input" );
         }
+        // plotstartable(startable, cluster, false);
+        // simulate a startable of size n
+        vector<vector<double>> simstartable = generatedistribution(startable,1000);
+        // plotstartable(simstartable, cluster, true);
+        simulation(simstartable);
+    } else {
+        throw invalid_argument( "Invalid input" );
     }
+    
     // Plot the observed period distribution for ONC
     // plotdistribution();
 
